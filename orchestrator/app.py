@@ -5,7 +5,7 @@ import uvicorn
 
 from .balancer import balance_shards
 from .partitions import init as partitions_init, get_free_partitions
-from .shards import init as shards_init, fetch_shard
+from .shards import init as shards_init, fetch_shard, release_shard
 from .shard_command import ShardCommand
 from shared.types.shard import ShardInfo
 
@@ -21,6 +21,12 @@ def update_shard(shard_info: ShardInfo):
     if free_partitions:
         ShardCommand(shard).send_partitions()
     balance_shards()
+    return {'status': 0}
+
+
+@app.delete('/shard')
+def delete_shard(hostname: str):
+    release_shard(hostname)
     return {'status': 0}
 
 

@@ -10,12 +10,12 @@ class Partition:
         self.owner = ''
 
 
-INDEX_TO_PARTITION = {}
+INDEX_TO_PARTITION: dict[int, 'Partition'] = {}
 
 
 def init():
-    global INDEX_TO_PARTITION
-    INDEX_TO_PARTITION = {pi: Partition(pi) for pi in PARTITION_INDEXES}
+    INDEX_TO_PARTITION.clear()
+    INDEX_TO_PARTITION.update({pi: Partition(pi) for pi in PARTITION_INDEXES})
 
 
 def get_free_partitions():
