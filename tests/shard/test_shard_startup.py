@@ -1,13 +1,15 @@
 """Tests for shard startup lifecycle and heartbeat."""
 
+import asyncio
 import os
-from unittest.mock import patch, MagicMock
+import requests as requests_lib
+from unittest.mock import patch, MagicMock, AsyncMock
 
 
 class TestShardRegistersOnStartup:
     def test_sends_post_shard_on_startup(self):
         # given a mock orchestrator endpoint
-        with patch("shard.orchestrator_command.requests.post") as mock_post:
+        with patch("shard.orchestrator_command.httpx.post") as mock_post:
             mock_post.return_value = MagicMock(status_code=200)
 
             # when the shard app starts up (trigger lifespan)
@@ -24,30 +26,116 @@ class TestShardRegistersOnStartup:
 
 
 class TestShardSendsHeartbeat:
-    def test_heartbeat_every_5_seconds(self):
+    def test_heartbeat_task_started_during_lifespan(self):
         # given a mock orchestrator endpoint
-        with patch("shard.orchestrator_command.requests.post") as mock_post:
+        with patch("shard.orchestrator_command.httpx.post") as mock_post:
             mock_post.return_value = MagicMock(status_code=200)
 
-            # when the shard app runs (simulate enough time for at least 2 heartbeats)
+            # when the shard app starts via its lifespan
+            from shard.app import app
+            from fastapi.testclient import TestClient
+
+            with TestClient(app):
+                pass
+
+            # then POST /shard was called at least once (initial registration)
+            assert mock_post.call_count >= 1
+
+
+class TestShardHeartbeatPayload:
+    def test_heartbeat_sends_correct_shard_info(self):
+        # given a mock orchestrator endpoint
+        with patch("shard.orchestrator_command.httpx.post") as mock_post:
+            mock_post.return_value = MagicMock(status_code=200)
+
+            # when the shard app starts and sends a heartbeat
+            from shard.app import app
+            from fastapi.testclient import TestClient
+            with TestClient(app):
+                pass
+
+            # then the payload contains url and load fields
+            assert mock_post.called
+            call_kwargs = mock_post.call_args
+            payload = call_kwargs[1].get("json") or call_kwargs[0][1] if len(call_kwargs[0]) > 1 else call_kwargs[1].get("json")
+            assert "url" in payload
+            assert "load" in payload
+            assert payload["load"] == 0.0
+
+
+class TestShardHeartbeatErrorHandling:
+    def test_heartbeat_continues_after_connection_error(self):
+        # given the orchestrator fails on the second call (first heartbeat), then recovers
+        call_count = {"n": 0}
+        def side_effect(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 2:  # first heartbeat call (after initial registration)
+                raise requests_lib.ConnectionError("orchestrator unreachable")
+            return MagicMock(status_code=200)
+
+        with patch("shard.orchestrator_command.httpx.post", side_effect=side_effect) as mock_post:
+            # when the shard app starts and the heartbeat loop runs
+            from shard.app import app, HEARTBEAT_INTERVAL
+            from fastapi.testclient import TestClient
+            import time
+
+            # patch the heartbeat interval to be very short for testing
+            with patch("shard.app.HEARTBEAT_INTERVAL", 0.05):
+                with TestClient(app):
+                    time.sleep(0.2)  # allow multiple heartbeat iterations
+
+            # then the heartbeat continued past the connection error (3+ calls total)
+            assert call_count["n"] >= 3
+
+    def test_heartbeat_continues_after_timeout(self):
+        # given the orchestrator times out on the second call (first heartbeat), then recovers
+        call_count = {"n": 0}
+        def side_effect(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 2:  # first heartbeat call (after initial registration)
+                raise requests_lib.Timeout("orchestrator timeout")
+            return MagicMock(status_code=200)
+
+        with patch("shard.orchestrator_command.httpx.post", side_effect=side_effect) as mock_post:
+            # when the shard app starts and the heartbeat loop runs
             from shard.app import app
             from fastapi.testclient import TestClient
             import time
 
-            with TestClient(app):
-                # Wait for at least one heartbeat cycle
-                # (In practice, the test verifies the heartbeat mechanism is set up)
-                time.sleep(0.1)  # let background tasks start
+            with patch("shard.app.HEARTBEAT_INTERVAL", 0.05):
+                with TestClient(app):
+                    time.sleep(0.2)
 
-            # then POST /shard was called (at least the initial registration)
-            assert mock_post.call_count >= 1
+            # then the heartbeat continued past the timeout error (3+ calls total)
+            assert call_count["n"] >= 3
+
+
+class TestShardHeartbeatLifecycle:
+    def test_heartbeat_task_cancelled_on_shutdown(self):
+        # given a mock orchestrator endpoint
+        with patch("shard.orchestrator_command.httpx.post") as mock_post:
+            mock_post.return_value = MagicMock(status_code=200)
+
+            # when the shard app starts and then shuts down
+            from shard.app import app
+            from fastapi.testclient import TestClient
+            import warnings
+
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                with TestClient(app):
+                    pass
+
+            # then no task-related warnings were raised
+            task_warnings = [x for x in w if "task" in str(x.message).lower()]
+            assert len(task_warnings) == 0
 
 
 class TestShardUsesOrchestratorUrlEnvVar:
     def test_custom_orchestrator_url(self):
         # given ORCHESTRATOR_URL is set to a custom value
         with patch.dict(os.environ, {"ORCHESTRATOR_URL": "http://custom-orch:8080"}):
-            with patch("shard.orchestrator_command.requests.post") as mock_post:
+            with patch("shard.orchestrator_command.httpx.post") as mock_post:
                 mock_post.return_value = MagicMock(status_code=200)
 
                 from shard.app import app
@@ -67,7 +155,7 @@ class TestShardUsesDefaultOrchestratorUrl:
         env = os.environ.copy()
         env.pop("ORCHESTRATOR_URL", None)
         with patch.dict(os.environ, env, clear=True):
-            with patch("shard.orchestrator_command.requests.post") as mock_post:
+            with patch("shard.orchestrator_command.httpx.post") as mock_post:
                 mock_post.return_value = MagicMock(status_code=200)
 
                 from shard.app import app

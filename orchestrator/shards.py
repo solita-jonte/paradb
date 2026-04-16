@@ -56,10 +56,12 @@ def release_shard(url: str):
         del URL_TO_SHARD[url]
 
 
-def remove_stale_shards():
-    """Remove shards that haven't sent a heartbeat within STALE_TIMEOUT seconds."""
+def remove_stale_shards() -> list[str]:
+    """Remove shards that haven't sent a heartbeat within STALE_TIMEOUT seconds.
+    Returns the list of removed shard URLs."""
     now = time.time()
     stale = [url for url, shard in URL_TO_SHARD.items()
              if now - shard.last_heartbeat > STALE_TIMEOUT]
     for url in stale:
         release_shard(url)
+    return stale

@@ -22,7 +22,7 @@ class TestSendPartitions:
         cmd = ShardCommand(shard)
 
         # when we call send_partitions
-        with patch("orchestrator.shard_command.requests.post") as mock_post:
+        with patch("orchestrator.shard_command.httpx.post") as mock_post:
             mock_post.return_value = MagicMock(status_code=200)
             cmd.send_partitions()
 
@@ -40,7 +40,7 @@ class TestHaltFlushPartitionWrites:
         cmd = ShardCommand(shard)
 
         # when we call halt_flush_partition_writes
-        with patch("orchestrator.shard_command.requests.delete") as mock_delete:
+        with patch("orchestrator.shard_command.httpx.delete") as mock_delete:
             mock_delete.return_value = MagicMock(status_code=200)
             cmd.halt_flush_partition_writes(42)
 
@@ -60,7 +60,7 @@ class TestShardBroadcastCommand:
         broadcast = ShardBroadcastCommand(shards)
 
         # when we call send_partitions
-        with patch("orchestrator.shard_command.requests.post") as mock_post:
+        with patch("orchestrator.shard_command.httpx.post") as mock_post:
             mock_post.return_value = MagicMock(status_code=200)
             broadcast.send_partitions()
 

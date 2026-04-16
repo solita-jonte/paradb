@@ -43,7 +43,7 @@ class TestWriteToNonOwnedPartitionForwards:
 
         try:
             # when we POST a document whose ID maps to that partition
-            with patch("shard.app.requests.post", return_value=mock_response) as mock_post:
+            with patch("shard.app.httpx.post", return_value=mock_response) as mock_post:
                 response = client.post("/document", json={"_id": doc_id, "name": "test"})
 
             # then the mock was called with the forwarded flag

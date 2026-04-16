@@ -1,6 +1,6 @@
 import os
 
-import requests
+import httpx
 
 from shared.types.shard import ShardInfo
 
@@ -17,4 +17,4 @@ class OrchestratorCommand:
     def update_shard(self, shard_info: ShardInfo):
         """Register or heartbeat to the orchestrator."""
         url = f"{_get_orchestrator_base_url()}/shard"
-        requests.post(url, json=shard_info.model_dump())
+        httpx.post(url, json=shard_info.model_dump())
