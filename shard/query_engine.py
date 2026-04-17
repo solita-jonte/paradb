@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from .document_storage import scan_all_documents
+from shard.document_storage import scan_all_documents
 
 
 def _resolve_dotted_field(document: dict[str, Any], field: str) -> tuple[bool, Any]:

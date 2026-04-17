@@ -13,11 +13,12 @@ def data_dir(tmp_path):
 
 
 class TestScanReturnsAllForEmptyQuery:
-    def test_all_documents_returned(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_all_documents_returned(self, data_dir):
         # given 3 documents on disk
         docs = []
         for i in range(3):
-            docs.append(write_document(data_dir, {"val": i}))
+            docs.append(await write_document(data_dir, {"val": i}))
 
         # when we execute an empty query
         results = execute_query(data_dir, {})
@@ -29,11 +30,12 @@ class TestScanReturnsAllForEmptyQuery:
 
 
 class TestScanFiltersDocuments:
-    def test_matching_subset_returned(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_matching_subset_returned(self, data_dir):
         # given documents with various field values
-        write_document(data_dir, {"name": "Alice", "age": 30})
-        write_document(data_dir, {"name": "Bob", "age": 25})
-        write_document(data_dir, {"name": "Charlie", "age": 35})
+        await write_document(data_dir, {"name": "Alice", "age": 30})
+        await write_document(data_dir, {"name": "Bob", "age": 25})
+        await write_document(data_dir, {"name": "Charlie", "age": 35})
 
         # when we query for age > 28
         results = execute_query(data_dir, {"age": {"$gt": 28}})
@@ -56,10 +58,11 @@ class TestScanOnEmptyDataDir:
 
 
 class TestScanByIdFilter:
-    def test_single_document_by_id(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_single_document_by_id(self, data_dir):
         # given a document with a known ID
-        doc = write_document(data_dir, {"name": "target"})
-        write_document(data_dir, {"name": "other"})
+        doc = await write_document(data_dir, {"name": "target"})
+        await write_document(data_dir, {"name": "other"})
 
         # when we query by _id
         results = execute_query(data_dir, {"_id": doc["_id"]})

@@ -1,6 +1,6 @@
 import httpx
 
-from .shards import Shard, all_shards
+from orchestrator.shards import Shard, all_shards
 
 
 class ShardCommand:
@@ -12,7 +12,7 @@ class ShardCommand:
     async def halt_flush_partition_writes(self, partition_index: int):
         """Tell the shard to halt writes on a specific partition."""
         print('sending halt_flush_partition_writes -> shard', self.shard.url)
-        url = f"{self.shard.url}/cmd/partition"
+        url = f"{self.shard.url}/internal/partitions"
         async with httpx.AsyncClient() as client:
             await client.delete(url, params={"partition_index": partition_index})
 
@@ -26,7 +26,7 @@ class ShardCommand:
                 "load": s.load,
                 "partitions": [p.index for p in s.partitions],
             })
-        url = f"{self.shard.url}/cmd/partitions"
+        url = f"{self.shard.url}/internal/partitions"
         async with httpx.AsyncClient() as client:
             await client.post(url, json=payload)
 

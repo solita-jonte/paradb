@@ -26,8 +26,8 @@ class TestHeartbeatInterval:
         with patch("shard.orchestrator_command.httpx.AsyncClient", return_value=mock_cm):
 
             # when we run the heartbeat coroutine with patched sleep
-            from shard.app import _heartbeat_loop
-            with patch("shard.app.asyncio.sleep", side_effect=tracking_sleep):
+            from shard.lifespan import _heartbeat_loop
+            with patch("shard.lifespan.asyncio.sleep", side_effect=tracking_sleep):
                 try:
                     asyncio.get_event_loop().run_until_complete(_heartbeat_loop())
                 except (asyncio.CancelledError, RuntimeError):

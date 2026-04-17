@@ -1,8 +1,9 @@
 """Tests for document locking — per-document write lock and partition halt lock."""
 
+import asyncio
 import os
 import pytest
-import threading
+import pytest_asyncio
 import uuid
 
 from shard.document_storage import write_document, partition_index_for_id
@@ -14,36 +15,34 @@ def data_dir(tmp_path):
     return str(tmp_path / "data")
 
 
-@pytest.fixture(autouse=True)
-def clean_locks():
-    reset_locks()
+@pytest_asyncio.fixture(autouse=True)
+async def clean_locks():
+    await reset_locks()
     yield
-    reset_locks()
+    await reset_locks()
 
 
 class TestConcurrentWritesSameDocumentSerialized:
-    def test_both_writes_complete_without_corruption(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_both_writes_complete_without_corruption(self, data_dir):
         # given a known document ID
         doc_id = str(uuid.uuid4())
         results = []
         errors = []
 
-        def write_payload(payload):
+        async def write_payload(payload):
             try:
                 lock = get_document_lock(doc_id)
-                with lock:
-                    result = write_document(data_dir, {"_id": doc_id, **payload})
+                async with lock:
+                    result = await write_document(data_dir, {"_id": doc_id, **payload})
                     results.append(result)
             except Exception as e:
                 errors.append(e)
 
-        # when two threads write concurrently to the same document ID
-        t1 = threading.Thread(target=write_payload, args=({"v": 1},))
-        t2 = threading.Thread(target=write_payload, args=({"v": 2},))
-        t1.start()
-        t2.start()
-        t1.join(timeout=5)
-        t2.join(timeout=5)
+        # when two tasks write concurrently to the same document ID
+        t1 = asyncio.create_task(write_payload({"v": 1}))
+        t2 = asyncio.create_task(write_payload({"v": 2}))
+        await asyncio.wait_for(asyncio.gather(t1, t2), timeout=5)
 
         # then both complete without errors
         assert not errors
@@ -62,27 +61,25 @@ class TestConcurrentWritesSameDocumentSerialized:
 
 
 class TestConcurrentWritesDifferentDocumentsParallel:
-    def test_both_files_exist(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_both_files_exist(self, data_dir):
         # given two different document IDs
         id1 = str(uuid.uuid4())
         id2 = str(uuid.uuid4())
         errors = []
 
-        def write_doc(doc_id, value):
+        async def write_doc(doc_id, value):
             try:
                 lock = get_document_lock(doc_id)
-                with lock:
-                    write_document(data_dir, {"_id": doc_id, "v": value})
+                async with lock:
+                    await write_document(data_dir, {"_id": doc_id, "v": value})
             except Exception as e:
                 errors.append(e)
 
-        # when two threads write to different documents
-        t1 = threading.Thread(target=write_doc, args=(id1, 1))
-        t2 = threading.Thread(target=write_doc, args=(id2, 2))
-        t1.start()
-        t2.start()
-        t1.join(timeout=5)
-        t2.join(timeout=5)
+        # when two tasks write to different documents
+        t1 = asyncio.create_task(write_doc(id1, 1))
+        t2 = asyncio.create_task(write_doc(id2, 2))
+        await asyncio.wait_for(asyncio.gather(t1, t2), timeout=5)
 
         # then both complete and both files exist
         assert not errors
@@ -92,63 +89,62 @@ class TestConcurrentWritesDifferentDocumentsParallel:
 
 
 class TestPartitionHaltBlocksWrites:
-    def test_write_blocked_until_halt_released(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_write_blocked_until_halt_released(self, data_dir):
         # given a partition with a halt (write lock) active
         doc_id = uuid.uuid4()
         partition_idx = partition_index_for_id(doc_id)
-        rw_lock = get_partition_lock(partition_idx)
+        rw_lock = await get_partition_lock(partition_idx)
 
         # acquire the write lock to simulate halt
-        rw_lock.acquire_write()
+        await rw_lock.acquire_write()
 
-        write_completed = threading.Event()
+        write_completed = asyncio.Event()
         errors = []
 
-        def do_write():
+        async def do_write():
             try:
                 # this should block on for_reading until halt is released
-                with rw_lock.for_reading():
-                    write_document(data_dir, {"_id": str(doc_id), "v": 1})
+                async with rw_lock.for_reading():
+                    await write_document(data_dir, {"_id": str(doc_id), "v": 1})
                 write_completed.set()
             except Exception as e:
                 errors.append(e)
                 write_completed.set()
 
-        # when a write is attempted in a background thread
-        t = threading.Thread(target=do_write)
-        t.start()
+        # when a write is attempted in a background task
+        task = asyncio.create_task(do_write())
 
         # then the write does not complete while halt is active
-        assert not write_completed.wait(timeout=0.3)
+        await asyncio.sleep(0.3)
+        assert not write_completed.is_set()
 
         # when we release the halt
-        rw_lock.release_write()
+        await rw_lock.release_write()
 
         # then the write completes
-        assert write_completed.wait(timeout=5)
-        t.join(timeout=5)
+        await asyncio.wait_for(write_completed.wait(), timeout=5)
+        await asyncio.wait_for(task, timeout=5)
         assert not errors
 
 
 class TestMultipleReadsDuringHaltConcurrent:
-    def test_readers_do_not_block_each_other(self):
+    @pytest.mark.asyncio
+    async def test_readers_do_not_block_each_other(self):
         # given a partition lock
-        rw_lock = get_partition_lock(0)
+        rw_lock = await get_partition_lock(0)
 
         acquired = []
-        barrier = threading.Barrier(3, timeout=5)
+        barrier = asyncio.Barrier(3)
 
-        def reader(idx):
-            with rw_lock.for_reading():
+        async def reader(idx):
+            async with rw_lock.for_reading():
                 acquired.append(idx)
-                barrier.wait()  # all readers must reach this concurrently
+                await barrier.wait()  # all readers must reach this concurrently
 
         # when three readers acquire the lock simultaneously
-        threads = [threading.Thread(target=reader, args=(i,)) for i in range(3)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=5)
+        tasks = [asyncio.create_task(reader(i)) for i in range(3)]
+        await asyncio.wait_for(asyncio.gather(*tasks), timeout=5)
 
         # then all three acquired the lock
         assert sorted(acquired) == [0, 1, 2]

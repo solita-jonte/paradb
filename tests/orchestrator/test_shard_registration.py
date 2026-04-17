@@ -27,7 +27,7 @@ def client():
 
 def _patch_shard_command():
     """Patch ShardCommand with async-compatible mock methods."""
-    p = patch("orchestrator.app.ShardCommand")
+    p = patch("orchestrator.shard_router.ShardCommand")
     mock = p.start()
     mock.return_value.send_partitions = AsyncMock()
     mock.return_value.halt_flush_partition_writes = AsyncMock()
@@ -42,7 +42,7 @@ class TestPostShardRegistersNewShard:
         # when we POST /shard
         p, _ = _patch_shard_command()
         try:
-            response = client.post("/shard", json=shard_info)
+            response = client.post("/internal/shard/heartbeat", json=shard_info)
         finally:
             p.stop()
 
@@ -56,10 +56,10 @@ class TestPostShardUpdatesLoad:
         # given an existing shard
         p, _ = _patch_shard_command()
         try:
-            client.post("/shard", json={"url": "http://shard-1:12345", "load": 0.5})
+            client.post("/internal/shard/heartbeat", json={"url": "http://shard-1:12345", "load": 0.5})
 
             # when we POST again with different load
-            client.post("/shard", json={"url": "http://shard-1:12345", "load": 0.8})
+            client.post("/internal/shard/heartbeat", json={"url": "http://shard-1:12345", "load": 0.8})
         finally:
             p.stop()
 
@@ -74,7 +74,7 @@ class TestPostShardTriggersPartitionAllocation:
         # when we register a new shard
         p, _ = _patch_shard_command()
         try:
-            client.post("/shard", json={"url": "http://shard-1:12345", "load": 0.0})
+            client.post("/internal/shard/heartbeat", json={"url": "http://shard-1:12345", "load": 0.0})
         finally:
             p.stop()
 
@@ -88,13 +88,13 @@ class TestDeleteShardRemovesGracefully:
         # given a registered shard with partitions
         p, _ = _patch_shard_command()
         try:
-            client.post("/shard", json={"url": "http://shard-1:12345", "load": 0.0})
+            client.post("/internal/shard/heartbeat", json={"url": "http://shard-1:12345", "load": 0.0})
         finally:
             p.stop()
         assert len(URL_TO_SHARD["http://shard-1:12345"].partitions) > 0
 
         # when we DELETE /shard
-        response = client.delete("/shard", params={"url": "http://shard-1:12345"})
+        response = client.delete("/internal/shard", params={"url": "http://shard-1:12345"})
 
         # then the shard is removed
         assert response.status_code == 200
@@ -106,7 +106,7 @@ class TestStaleShard:
         # given a registered shard
         p, _ = _patch_shard_command()
         try:
-            client.post("/shard", json={"url": "http://shard-1:12345", "load": 0.0})
+            client.post("/internal/shard/heartbeat", json={"url": "http://shard-1:12345", "load": 0.0})
         finally:
             p.stop()
 
@@ -128,8 +128,8 @@ class TestStaleShard:
             MockBalCmd.return_value.send_partitions = AsyncMock()
             MockBalBroadcast.return_value.send_partitions = AsyncMock()
             try:
-                client.post("/shard", json={"url": "http://shard-1:12345", "load": 0.0})
-                client.post("/shard", json={"url": "http://shard-2:12345", "load": 0.0})
+                client.post("/internal/shard/heartbeat", json={"url": "http://shard-1:12345", "load": 0.0})
+                client.post("/internal/shard/heartbeat", json={"url": "http://shard-2:12345", "load": 0.0})
             finally:
                 p.stop()
 
@@ -153,8 +153,8 @@ class TestStaleShard:
             MockBalCmd.return_value.send_partitions = AsyncMock()
             MockBalBroadcast.return_value.send_partitions = AsyncMock()
             try:
-                client.post("/shard", json={"url": "http://shard-1:12345", "load": 0.0})
-                client.post("/shard", json={"url": "http://shard-2:12345", "load": 0.0})
+                client.post("/internal/shard/heartbeat", json={"url": "http://shard-1:12345", "load": 0.0})
+                client.post("/internal/shard/heartbeat", json={"url": "http://shard-2:12345", "load": 0.0})
             finally:
                 p.stop()
 
@@ -177,9 +177,9 @@ class TestStaleShard:
             MockBalCmd.return_value.send_partitions = AsyncMock()
             MockBalBroadcast.return_value.send_partitions = AsyncMock()
             try:
-                client.post("/shard", json={"url": "http://shard-1:12345", "load": 0.0})
-                client.post("/shard", json={"url": "http://shard-2:12345", "load": 0.0})
-                client.post("/shard", json={"url": "http://shard-3:12345", "load": 0.0})
+                client.post("/internal/shard/heartbeat", json={"url": "http://shard-1:12345", "load": 0.0})
+                client.post("/internal/shard/heartbeat", json={"url": "http://shard-2:12345", "load": 0.0})
+                client.post("/internal/shard/heartbeat", json={"url": "http://shard-3:12345", "load": 0.0})
             finally:
                 p.stop()
 
@@ -201,7 +201,7 @@ class TestShardHeartbeatsWithin15Seconds:
         # given a registered shard that heartbeats within 15 seconds
         p, _ = _patch_shard_command()
         try:
-            client.post("/shard", json={"url": "http://shard-1:12345", "load": 0.0})
+            client.post("/internal/shard/heartbeat", json={"url": "http://shard-1:12345", "load": 0.0})
         finally:
             p.stop()
 
@@ -221,7 +221,7 @@ class TestStaleShardPartitionRelease:
         # given a shard that owns all partitions
         p, _ = _patch_shard_command()
         try:
-            client.post("/shard", json={"url": "http://shard-1:12345", "load": 0.0})
+            client.post("/internal/shard/heartbeat", json={"url": "http://shard-1:12345", "load": 0.0})
         finally:
             p.stop()
 

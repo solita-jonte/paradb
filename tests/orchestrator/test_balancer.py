@@ -132,7 +132,7 @@ class TestRebalanceUsesTryLock:
                 t1.join(timeout=5)
                 t2.join(timeout=5)
 
-        # then at most one partition was moved (one call skipped due to TryLock)
+        # then at most one partition was moved (one call skipped due to try-lock)
         total_a = len(URL_TO_SHARD["shard-a"].partitions)
         total_b = len(URL_TO_SHARD["shard-b"].partitions)
         assert total_a + total_b == 15  # no partitions lost

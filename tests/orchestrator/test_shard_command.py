@@ -38,11 +38,11 @@ class TestSendPartitions:
         with patch("orchestrator.shard_command.httpx.AsyncClient", return_value=mock_cm):
             await cmd.send_partitions()
 
-        # then an HTTP POST was made to the shard's /cmd/partitions endpoint
+        # then an HTTP POST was made to the shard's /internal/partitions endpoint
         assert mock_client.post.called
         url = mock_client.post.call_args[0][0]
         assert "shard-1" in url
-        assert "/cmd/partitions" in url
+        assert "/internal/partitions" in url
 
 
 class TestHaltFlushPartitionWrites:
@@ -61,7 +61,7 @@ class TestHaltFlushPartitionWrites:
         assert mock_client.delete.called
         url = mock_client.delete.call_args[0][0]
         assert "shard-1" in url
-        assert "/cmd/partition" in url
+        assert "/internal/partition" in url
 
 
 class TestShardBroadcastCommand:

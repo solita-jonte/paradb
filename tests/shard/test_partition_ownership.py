@@ -3,17 +3,16 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from shard.app import app, partition_to_shard_url, shards
+from shard.app import app
+from shard.partitions import partition_to_shard_url
 from shard.url import get_host_url
 
 
 @pytest.fixture(autouse=True)
 def reset_state():
     partition_to_shard_url.clear()
-    shards.clear()
     yield
     partition_to_shard_url.clear()
-    shards.clear()
 
 
 @pytest.fixture
@@ -29,8 +28,8 @@ class TestPostCmdPartitionsUpdatesTable:
             {"url": "http://shard-2:23456", "load": 0.0, "partitions": [3, 4, 5]},
         ]
 
-        # when we POST /cmd/partitions
-        response = client.post("/cmd/partitions", json=payload)
+        # when we POST /internal/partitions
+        response = client.post("/internal/partitions", json=payload)
 
         # then the mapping is updated correctly
         assert response.status_code == 200
@@ -41,12 +40,12 @@ class TestPostCmdPartitionsUpdatesTable:
 class TestPartitionTableReplacesState:
     def test_latest_mapping_active(self, client):
         # given an initial partition table
-        client.post("/cmd/partitions", json=[
+        client.post("/internal/partitions", json=[
             {"url": "http://shard-1:12345", "load": 0.0, "partitions": [0, 1, 2]},
         ])
 
         # when we send a different table
-        client.post("/cmd/partitions", json=[
+        client.post("/internal/partitions", json=[
             {"url": "http://shard-2:23456", "load": 0.0, "partitions": [0, 1, 2]},
         ])
 
@@ -57,7 +56,7 @@ class TestPartitionTableReplacesState:
 class TestLookUpOwningHost:
     def test_returns_correct_hostname(self, client):
         # given a partition table
-        client.post("/cmd/partitions", json=[
+        client.post("/internal/partitions", json=[
             {"url": "http://shard-1:12345", "load": 0.0, "partitions": [10, 20]},
             {"url": "http://shard-2:23456", "load": 0.0, "partitions": [30, 40]},
         ])
@@ -73,7 +72,7 @@ class TestShardRecognizesOwnPartitions:
         url = get_host_url()
 
         # and a partition table with some local and some remote partitions
-        client.post("/cmd/partitions", json=[
+        client.post("/internal/partitions", json=[
             {"url": url, "load": 0.0, "partitions": [0, 1]},
             {"url": "http://other-shard", "load": 0.0, "partitions": [2, 3]},
         ])

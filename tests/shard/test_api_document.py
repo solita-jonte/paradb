@@ -1,4 +1,4 @@
-"""Tests for the POST /document and DELETE /document REST endpoints."""
+"""Tests for the POST /db/document and DELETE /db/document REST endpoints."""
 
 from fastapi.testclient import TestClient
 import pytest
@@ -11,12 +11,12 @@ def data_dir(tmp_path):
     """Provide a fresh DATA_DIR and configure the app to use it."""
     d = str(tmp_path / "data")
     # Set the data dir on the app/module so the endpoints use it
-    import shard.app as shard_app
-    original = getattr(shard_app, "DATA_DIR", None)
-    shard_app.DATA_DIR = d
+    import shard.routers.db as shard_db_router
+    original = getattr(shard_db_router, "DATA_DIR", None)
+    shard_db_router.DATA_DIR = d
     yield d
     if original is not None:
-        shard_app.DATA_DIR = original
+        shard_db_router.DATA_DIR = original
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ class TestPostDocumentWithoutId:
         body = {"name": "Alice"}
 
         # when we POST it
-        response = client.post("/document", json=body)
+        response = client.post("/db/document", json=body)
 
         # then we get a 201 with a generated UUID _id
         assert response.status_code == 201
@@ -48,7 +48,7 @@ class TestPostDocumentWithId:
         body = {"_id": doc_id, "name": "Bob"}
 
         # when we POST it
-        response = client.post("/document", json=body)
+        response = client.post("/db/document", json=body)
 
         # then the document is created
         assert response.status_code in (200, 201)
@@ -61,10 +61,10 @@ class TestPostDocumentUpsert:
     def test_full_replacement_on_upsert(self, client):
         # given an existing document
         doc_id = str(uuid.uuid4())
-        client.post("/document", json={"_id": doc_id, "a": 1})
+        client.post("/db/document", json={"_id": doc_id, "a": 1})
 
         # when we POST again with a different body
-        response = client.post("/document", json={"_id": doc_id, "b": 2})
+        response = client.post("/db/document", json={"_id": doc_id, "b": 2})
 
         # then the response has the new field and not the old
         data = response.json()
@@ -79,7 +79,7 @@ class TestPostDocumentReturnsFullDocument:
         body = {"name": "Alice", "age": 30}
 
         # when we POST it
-        response = client.post("/document", json=body)
+        response = client.post("/db/document", json=body)
 
         # then the response contains all fields plus _id
         data = response.json()
@@ -91,11 +91,11 @@ class TestPostDocumentReturnsFullDocument:
 class TestDeleteDocument:
     def test_removes_document(self, client):
         # given a created document
-        create_resp = client.post("/document", json={"name": "delete-me"})
+        create_resp = client.post("/db/document", json={"name": "delete-me"})
         doc_id = create_resp.json()["_id"]
 
         # when we DELETE it
-        response = client.delete(f"/document/{doc_id}")
+        response = client.delete(f"/db/document/{doc_id}")
 
         # then it succeeds
         assert response.status_code in (200, 204)
@@ -107,7 +107,7 @@ class TestDeleteNonExistentDocument:
         doc_id = str(uuid.uuid4())
 
         # when we DELETE it
-        response = client.delete(f"/document/{doc_id}")
+        response = client.delete(f"/db/document/{doc_id}")
 
         # then we get 404 or 200
         assert response.status_code in (200, 404)
@@ -118,7 +118,7 @@ class TestPostDocumentInvalidJson:
         # given an invalid body
         # when we POST it
         response = client.post(
-            "/document",
+            "/db/document",
             content="not valid json",
             headers={"Content-Type": "application/json"},
         )

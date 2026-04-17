@@ -1,5 +1,4 @@
 import os
-
 import httpx
 
 from shared.types.shard import ShardInfo
@@ -16,6 +15,6 @@ class OrchestratorCommand:
 
     async def update_shard(self, shard_info: ShardInfo):
         """Register or heartbeat to the orchestrator."""
-        url = f"{_get_orchestrator_base_url()}/shard"
+        url = f"{_get_orchestrator_base_url()}/internal/shard/heartbeat"
         async with httpx.AsyncClient() as client:
             await client.post(url, json=shard_info.model_dump())

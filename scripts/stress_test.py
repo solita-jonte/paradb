@@ -12,7 +12,7 @@ async def writer(client, url, stop):
     while time.monotonic() < stop:
         doc_id = random.choice(doc_ids)
         doc = {"_id": doc_id, "v": random.randint(0, 1_000_000)}
-        r = await client.post(f"{url}/document", json=doc)
+        r = await client.post(f"{url}/db/document", json=doc)
         r.raise_for_status()
         wrote += 1
     return wrote
@@ -20,7 +20,7 @@ async def writer(client, url, stop):
 async def reader(client, url, stop):
     read = 0
     while time.monotonic() < stop:
-        r = await client.post(f"{url}/query", json={"v": {"$gt": 500_000}})
+        r = await client.post(f"{url}/db/query", json={"v": {"$gt": 500_000}})
         r.raise_for_status()
         read += len(r.json())
     return read

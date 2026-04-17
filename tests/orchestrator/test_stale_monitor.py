@@ -47,14 +47,14 @@ def _mock_async_client():
 
 
 class TestStaleMonitorTask:
-    def test_monitoring_task_calls_remove_stale_shards(self):
+    @pytest.mark.asyncio
+    async def test_monitoring_task_calls_remove_stale_shards(self):
         # given a mock remove_stale_shards
-        with patch("orchestrator.app.remove_stale_shards", return_value=[]) as mock_remove:
-            with patch("orchestrator.app.MONITOR_INTERVAL", 0.05):
+        with patch("orchestrator.lifespan.remove_stale_shards", return_value=[]) as mock_remove:
+            with patch("orchestrator.lifespan.MONITOR_INTERVAL", 0.05):
                 # when the orchestrator app starts with its lifespan
                 with TestClient(app):
-                    import time
-                    time.sleep(0.2)  # let the monitoring task run
+                    await asyncio.sleep(0.2)  # let the monitoring task run
 
                 # then remove_stale_shards was called at least once
                 assert mock_remove.call_count >= 1
@@ -72,7 +72,7 @@ class TestPartitionRedistributionAfterStaleRemoval:
         s2.last_heartbeat = time.time() - 16
         mock_cm, mock_client = _mock_async_client()
         with patch("orchestrator.shard_command.httpx.AsyncClient", return_value=mock_cm):
-            from orchestrator.app import _redistribute_free_partitions
+            from orchestrator.lifespan import _redistribute_free_partitions
             remove_stale_shards()
             await _redistribute_free_partitions()
 
@@ -93,7 +93,7 @@ class TestPartitionRedistributionAfterStaleRemoval:
         # when free partitions are redistributed
         mock_cm, mock_client = _mock_async_client()
         with patch("orchestrator.shard_command.httpx.AsyncClient", return_value=mock_cm):
-            from orchestrator.app import _redistribute_free_partitions
+            from orchestrator.lifespan import _redistribute_free_partitions
             await _redistribute_free_partitions()
 
         # then each shard has 512 partitions (1024 / 2)
@@ -110,12 +110,12 @@ class TestPartitionRedistributionAfterStaleRemoval:
         # when stale removal and redistribution happen
         mock_cm, mock_client = _mock_async_client()
         with patch("orchestrator.shard_command.httpx.AsyncClient", return_value=mock_cm):
-            from orchestrator.app import _redistribute_free_partitions
+            from orchestrator.lifespan import _redistribute_free_partitions
             remove_stale_shards()
             await _redistribute_free_partitions()
 
-        # then a broadcast was sent (POST to /cmd/partitions on remaining shards)
-        partition_posts = [c for c in mock_client.post.call_args_list if "/cmd/partitions" in str(c)]
+        # then a broadcast was sent (POST to /internal/partitions on remaining shards)
+        partition_posts = [c for c in mock_client.post.call_args_list if "/internal/partitions" in str(c)]
         assert len(partition_posts) >= 1
 
     def test_no_redistribution_when_no_shards_removed(self):
@@ -141,7 +141,7 @@ class TestPartitionRedistributionAfterStaleRemoval:
         # when stale removal and redistribution happen
         mock_cm, mock_client = _mock_async_client()
         with patch("orchestrator.shard_command.httpx.AsyncClient", return_value=mock_cm):
-            from orchestrator.app import _redistribute_free_partitions
+            from orchestrator.lifespan import _redistribute_free_partitions
             remove_stale_shards()
             # then no crash occurs
             await _redistribute_free_partitions()
@@ -153,16 +153,16 @@ class TestPartitionRedistributionAfterStaleRemoval:
 
 
 class TestStaleMonitorLifecycle:
-    def test_monitoring_task_cancelled_on_shutdown(self):
+    @pytest.mark.asyncio
+    async def test_monitoring_task_cancelled_on_shutdown(self):
         # given the orchestrator app with a monitoring task
-        with patch("orchestrator.app.remove_stale_shards", return_value=[]):
-            with patch("orchestrator.app.MONITOR_INTERVAL", 0.05):
+        with patch("orchestrator.lifespan.remove_stale_shards", return_value=[]):
+            with patch("orchestrator.lifespan.MONITOR_INTERVAL", 0.05):
                 with warnings.catch_warnings(record=True) as w:
                     warnings.simplefilter("always")
                     # when the app starts and then shuts down
                     with TestClient(app):
-                        import time
-                        time.sleep(0.1)
+                        await asyncio.sleep(0.1)
 
                 # then no task-related warnings were raised
                 task_warnings = [x for x in w if "task" in str(x.message).lower()]
@@ -177,9 +177,9 @@ class TestStaleMonitorLifecycle:
             if len(sleep_args) >= 2:
                 raise asyncio.CancelledError()
 
-        with patch("orchestrator.app.remove_stale_shards", return_value=[]):
-            from orchestrator.app import _monitor_stale_shards
-            with patch("orchestrator.app.asyncio.sleep", side_effect=tracking_sleep):
+        with patch("orchestrator.lifespan.remove_stale_shards", return_value=[]):
+            from orchestrator.lifespan import _monitor_stale_shards
+            with patch("orchestrator.lifespan.asyncio.sleep", side_effect=tracking_sleep):
                 # when the monitoring coroutine runs
                 try:
                     asyncio.get_event_loop().run_until_complete(_monitor_stale_shards())

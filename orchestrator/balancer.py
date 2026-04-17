@@ -1,19 +1,22 @@
-from .shards import all_shards
-from .shard_command import ShardCommand, ShardBroadcastCommand
-from shared.try_lock import TryLock
+import asyncio
+
+from orchestrator.shards import all_shards
+from orchestrator.shard_command import ShardCommand, ShardBroadcastCommand
 
 
-try_lock = TryLock()
+try_lock = asyncio.Lock()
 
 
 async def balance_shards():
     """Balance so each shard have equal number of partitions."""
 
-    # only one thread at a time
-    with try_lock as locked:
-        if not locked:
-            return
+    if try_lock.locked():
+        print("Skipping balancing, someone already at it!")
+        return
 
+    # only one thread at a time
+    async with try_lock:
+        print("Re-balancing shards...")
         # sort based on how many partitions they each have
         shards_balance = sorted(all_shards(), key=lambda sh: len(sh.partitions))
         # check if we move a partition
@@ -22,6 +25,7 @@ async def balance_shards():
             smallest = shards_balance[0]
             biggest = shards_balance[-1]
             partition = biggest.partitions[-1]
+            print(f"Moving partition {partition.index} from shard {biggest.url} to {smallest.url}")
             # stop writes from this shard
             await ShardCommand(biggest).halt_flush_partition_writes(partition.index)
             biggest.remove_partition(partition)

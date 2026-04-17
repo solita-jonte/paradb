@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import pytest
 import requests as requests_lib
 from unittest.mock import patch, MagicMock, AsyncMock
 
@@ -74,7 +75,8 @@ class TestShardHeartbeatPayload:
 
 
 class TestShardHeartbeatErrorHandling:
-    def test_heartbeat_continues_after_connection_error(self):
+    @pytest.mark.asyncio
+    async def test_heartbeat_continues_after_connection_error(self):
         # given the orchestrator fails on the second call (first heartbeat), then recovers
         call_count = {"n": 0}
         def side_effect(*args, **kwargs):
@@ -91,19 +93,19 @@ class TestShardHeartbeatErrorHandling:
 
         with patch("shard.orchestrator_command.httpx.AsyncClient", return_value=mock_cm):
             # when the shard app starts and the heartbeat loop runs
-            from shard.app import app, HEARTBEAT_INTERVAL
+            from shard.app import app
             from fastapi.testclient import TestClient
-            import time
 
             # patch the heartbeat interval to be very short for testing
-            with patch("shard.app.HEARTBEAT_INTERVAL", 0.05):
+            with patch("shard.lifespan.HEARTBEAT_INTERVAL", 0.05):
                 with TestClient(app):
-                    time.sleep(0.2)  # allow multiple heartbeat iterations
+                    await asyncio.sleep(0.2)  # allow multiple heartbeat iterations
 
             # then the heartbeat continued past the connection error (3+ calls total)
             assert call_count["n"] >= 3
 
-    def test_heartbeat_continues_after_timeout(self):
+    @pytest.mark.asyncio
+    async def test_heartbeat_continues_after_timeout(self):
         # given the orchestrator times out on the second call (first heartbeat), then recovers
         call_count = {"n": 0}
         def side_effect(*args, **kwargs):
@@ -122,11 +124,10 @@ class TestShardHeartbeatErrorHandling:
             # when the shard app starts and the heartbeat loop runs
             from shard.app import app
             from fastapi.testclient import TestClient
-            import time
 
-            with patch("shard.app.HEARTBEAT_INTERVAL", 0.05):
+            with patch("shard.lifespan.HEARTBEAT_INTERVAL", 0.05):
                 with TestClient(app):
-                    time.sleep(0.2)
+                    await asyncio.sleep(0.2)
 
             # then the heartbeat continued past the timeout error (3+ calls total)
             assert call_count["n"] >= 3

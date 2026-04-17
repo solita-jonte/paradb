@@ -27,7 +27,7 @@ def _doc_path(data_dir: str, doc_id: uuid.UUID) -> str:
     return os.path.join(data_dir, dir_name, f"{doc_id}.json")
 
 
-def write_document(data_dir: str, document: dict[str, Any]) -> dict[str, Any]:
+async def write_document(data_dir: str, document: dict[str, Any]) -> dict[str, Any]:
     """Write (upsert) a document to disk. Generates _id if missing, for unit testing. Returns the full document."""
     doc = dict(document)
     if "_id" not in doc:  # for testing only
@@ -42,7 +42,7 @@ def write_document(data_dir: str, document: dict[str, Any]) -> dict[str, Any]:
         print("writing tmp:", tmp_path)
         with open(tmp_path, "w") as f:
             json.dump(doc, f)
-        file_replace_retry(tmp_path, file_path, 5)
+        await file_replace_retry(tmp_path, file_path, 5)
     except OSError as ex:
         print("replace failed:", ex)
         print("tmp:", tmp_path, "exists:", os.path.exists(tmp_path))

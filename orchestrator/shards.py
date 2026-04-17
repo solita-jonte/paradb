@@ -1,6 +1,6 @@
 import time
 
-from .partitions import Partition
+from orchestrator.partitions import Partition
 from shared.types.shard import ShardInfo
 
 STALE_TIMEOUT = 15  # seconds

@@ -22,23 +22,25 @@ def data_dir(tmp_path):
 
 
 class TestWriteNewDocumentWithGeneratedId:
-    def test_returns_document_with_uuid_id(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_returns_document_with_uuid_id(self, data_dir):
         # given a document body with no _id
         body = {"name": "Alice"}
 
         # when we write it
-        result = write_document(data_dir, body)
+        result = await write_document(data_dir, body)
 
         # then the result contains a valid UUID _id
         assert "_id" in result
         uuid.UUID(result["_id"])  # raises if not valid
 
-    def test_file_exists_at_correct_path(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_file_exists_at_correct_path(self, data_dir):
         # given a document body with no _id
         body = {"name": "Alice"}
 
         # when we write it
-        result = write_document(data_dir, body)
+        result = await write_document(data_dir, body)
 
         # then a JSON file exists at the correct partition path
         doc_id = uuid.UUID(result["_id"])
@@ -47,12 +49,13 @@ class TestWriteNewDocumentWithGeneratedId:
         expected_path = os.path.join(data_dir, dir_name, f"{doc_id}.json")
         assert os.path.isfile(expected_path)
 
-    def test_file_content_matches_returned_document(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_file_content_matches_returned_document(self, data_dir):
         # given a document body with no _id
         body = {"name": "Alice"}
 
         # when we write it
-        result = write_document(data_dir, body)
+        result = await write_document(data_dir, body)
 
         # then the file content matches
         doc_id = uuid.UUID(result["_id"])
@@ -65,13 +68,14 @@ class TestWriteNewDocumentWithGeneratedId:
 
 
 class TestWriteNewDocumentWithSupplierId:
-    def test_file_in_correct_partition_dir(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_file_in_correct_partition_dir(self, data_dir):
         # given a document with a known UUID
         doc_id = uuid.UUID("eeb2f00c-d6e6-464d-b692-09e5ca759be9")
         body = {"_id": str(doc_id), "name": "test"}
 
         # when we write it
-        write_document(data_dir, body)
+        await write_document(data_dir, body)
 
         # then the file is in the correct partition directory
         partition_idx = partition_index_for_id(doc_id)
@@ -79,13 +83,14 @@ class TestWriteNewDocumentWithSupplierId:
         expected_path = os.path.join(data_dir, dir_name, f"{doc_id}.json")
         assert os.path.isfile(expected_path)
 
-    def test_on_disk_contains_supplied_id(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_on_disk_contains_supplied_id(self, data_dir):
         # given a document with a known UUID
         doc_id = uuid.UUID("eeb2f00c-d6e6-464d-b692-09e5ca759be9")
         body = {"_id": str(doc_id), "name": "test"}
 
         # when we write it
-        write_document(data_dir, body)
+        await write_document(data_dir, body)
 
         # then on-disk JSON contains the supplied _id
         partition_idx = partition_index_for_id(doc_id)
@@ -97,13 +102,14 @@ class TestWriteNewDocumentWithSupplierId:
 
 
 class TestUpsertOverwritesDocument:
-    def test_full_replacement(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_full_replacement(self, data_dir):
         # given an existing document
         doc_id = str(uuid.uuid4())
-        write_document(data_dir, {"_id": doc_id, "a": 1})
+        await write_document(data_dir, {"_id": doc_id, "a": 1})
 
         # when we upsert with a different body
-        result = write_document(data_dir, {"_id": doc_id, "b": 2})
+        result = await write_document(data_dir, {"_id": doc_id, "b": 2})
 
         # then the result has the new field and not the old
         assert result["b"] == 2
@@ -112,18 +118,20 @@ class TestUpsertOverwritesDocument:
 
 
 class TestAtomicWriteViaTemporaryFile:
-    def test_no_temp_files_remain(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_no_temp_files_remain(self, data_dir):
         # given a fresh data dir
         # when we write a document
-        write_document(data_dir, {"name": "test"})
+        await write_document(data_dir, {"name": "test"})
 
         # then no .tmp_ files remain
         tmp_files = glob.glob(os.path.join(data_dir, "**", ".tmp_*.tmp-json"), recursive=True)
         assert tmp_files == []
 
-    def test_target_file_is_valid_json(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_target_file_is_valid_json(self, data_dir):
         # given we write a document
-        result = write_document(data_dir, {"name": "test"})
+        result = await write_document(data_dir, {"name": "test"})
 
         # when we read the file back
         doc_id = uuid.UUID(result["_id"])
@@ -138,12 +146,13 @@ class TestAtomicWriteViaTemporaryFile:
 
 
 class TestPartitionDirectoryCreatedOnFirstWrite:
-    def test_directory_auto_created(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_directory_auto_created(self, data_dir):
         # given a fresh DATA_DIR with no subdirectories
         assert not os.path.exists(data_dir)
 
         # when we write a document
-        result = write_document(data_dir, {"name": "first"})
+        result = await write_document(data_dir, {"name": "first"})
 
         # then the partition directory was created
         doc_id = uuid.UUID(result["_id"])
@@ -153,9 +162,10 @@ class TestPartitionDirectoryCreatedOnFirstWrite:
 
 
 class TestReadDocumentById:
-    def test_read_returns_written_document(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_read_returns_written_document(self, data_dir):
         # given a written document
-        original = write_document(data_dir, {"name": "Alice", "age": 30})
+        original = await write_document(data_dir, {"name": "Alice", "age": 30})
 
         # when we read it by _id
         result = read_document(data_dir, original["_id"])
@@ -178,9 +188,10 @@ class TestReadNonExistentDocument:
 
 
 class TestDeleteDocument:
-    def test_file_removed_from_disk(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_file_removed_from_disk(self, data_dir):
         # given a written document
-        original = write_document(data_dir, {"name": "delete-me"})
+        original = await write_document(data_dir, {"name": "delete-me"})
         doc_id = original["_id"]
 
         # when we delete it
@@ -193,9 +204,10 @@ class TestDeleteDocument:
         file_path = os.path.join(data_dir, dir_name, f"{uid}.json")
         assert not os.path.exists(file_path)
 
-    def test_read_after_delete_returns_none(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_read_after_delete_returns_none(self, data_dir):
         # given a written and then deleted document
-        original = write_document(data_dir, {"name": "delete-me"})
+        original = await write_document(data_dir, {"name": "delete-me"})
         doc_id = original["_id"]
         delete_document(data_dir, doc_id)
 
@@ -218,7 +230,8 @@ class TestDeleteNonExistentDocument:
 
 
 class TestDocumentIdDeterminesPartitionDirectory:
-    def test_multiple_uuids_land_in_correct_dirs(self, data_dir):
+    @pytest.mark.asyncio
+    async def test_multiple_uuids_land_in_correct_dirs(self, data_dir):
         # given several UUIDs with known partition indices
         test_cases = []
         for target_partition in [0, 1, 0x1FF, 0x3FF]:
@@ -228,7 +241,7 @@ class TestDocumentIdDeterminesPartitionDirectory:
 
         for doc_id, expected_partition in test_cases:
             # when we write the document
-            write_document(data_dir, {"_id": str(doc_id), "val": expected_partition})
+            await write_document(data_dir, {"_id": str(doc_id), "val": expected_partition})
 
             # then the file is in the correctly-named hex directory
             expected_dir = partition_dir_name(expected_partition)

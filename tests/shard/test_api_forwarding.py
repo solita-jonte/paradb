@@ -13,12 +13,12 @@ from shard.url import get_host_url
 @pytest.fixture
 def data_dir(tmp_path):
     d = str(tmp_path / "data")
-    import shard.app as shard_app
-    original = getattr(shard_app, "DATA_DIR", None)
-    shard_app.DATA_DIR = d
+    import shard.routers.db as shard_db_routers
+    original = getattr(shard_db_routers, "DATA_DIR", None)
+    shard_db_routers.DATA_DIR = d
     yield d
     if original is not None:
-        shard_app.DATA_DIR = original
+        shard_db_routers.DATA_DIR = original
 
 
 @pytest.fixture
@@ -32,10 +32,10 @@ class TestWriteToNonOwnedPartitionForwards:
         doc_id = str(uuid.uuid4())
         partition_idx = partition_index_for_id(uuid.UUID(doc_id))
 
-        import shard.app as shard_app
-        original_mapping = shard_app.partition_to_shard_url.copy()
+        import shard.partitions as shard_app_partitions
+        original_mapping = shard_app_partitions.partition_to_shard_url.copy()
         # set up: this partition is owned by "other-shard"
-        shard_app.partition_to_shard_url[partition_idx] = "other-shard"
+        shard_app_partitions.partition_to_shard_url[partition_idx] = "other-shard"
 
         mock_response = MagicMock()
         mock_response.status_code = 201
@@ -49,8 +49,8 @@ class TestWriteToNonOwnedPartitionForwards:
 
         try:
             # when we POST a document whose ID maps to that partition
-            with patch("shard.app.httpx.AsyncClient", return_value=mock_cm):
-                response = client.post("/document", json={"_id": doc_id, "name": "test"})
+            with patch("shard.routers.db.httpx.AsyncClient", return_value=mock_cm):
+                response = client.post("/db/document", json={"_id": doc_id, "name": "test"})
 
             # then the mock was called with the forwarded flag
             assert mock_client.post.called
@@ -60,8 +60,8 @@ class TestWriteToNonOwnedPartitionForwards:
             # and the response is proxied back
             assert response.status_code == 201
         finally:
-            shard_app.partition_to_shard_url.clear()
-            shard_app.partition_to_shard_url.update(original_mapping)
+            shard_app_partitions.partition_to_shard_url.clear()
+            shard_app_partitions.partition_to_shard_url.update(original_mapping)
 
 
 class TestForwardedWriteToNonOwnedReturnsRetry:
@@ -70,14 +70,14 @@ class TestForwardedWriteToNonOwnedReturnsRetry:
         doc_id = str(uuid.uuid4())
         partition_idx = partition_index_for_id(uuid.UUID(doc_id))
 
-        import shard.app as shard_app
-        original_mapping = shard_app.partition_to_shard_url.copy()
-        shard_app.partition_to_shard_url[partition_idx] = "yet-another-shard"
+        import shard.partitions as shard_app_partitions
+        original_mapping = shard_app_partitions.partition_to_shard_url.copy()
+        shard_app_partitions.partition_to_shard_url[partition_idx] = "yet-another-shard"
 
         try:
             # when we POST with the forwarded flag set
             response = client.post(
-                "/document",
+                "/db/document",
                 json={"_id": doc_id, "name": "test"},
                 headers={"X-Forwarded": "true"},
             )
@@ -85,8 +85,8 @@ class TestForwardedWriteToNonOwnedReturnsRetry:
             # then we get an error response (not another forward)
             assert response.status_code in (409, 503, 307)
         finally:
-            shard_app.partition_to_shard_url.clear()
-            shard_app.partition_to_shard_url.update(original_mapping)
+            shard_app_partitions.partition_to_shard_url.clear()
+            shard_app_partitions.partition_to_shard_url.update(original_mapping)
 
 
 class TestForwardedWriteToOwnedPartitionSucceeds:
@@ -95,15 +95,15 @@ class TestForwardedWriteToOwnedPartitionSucceeds:
         doc_id = str(uuid.uuid4())
         partition_idx = partition_index_for_id(uuid.UUID(doc_id))
 
-        import shard.app as shard_app
+        import shard.partitions as shard_app_partitions
         url = get_host_url()
-        original_mapping = shard_app.partition_to_shard_url.copy()
-        shard_app.partition_to_shard_url[partition_idx] = url
+        original_mapping = shard_app_partitions.partition_to_shard_url.copy()
+        shard_app_partitions.partition_to_shard_url[partition_idx] = url
 
         try:
             # when we POST with the forwarded flag
             response = client.post(
-                "/document",
+                "/db/document",
                 json={"_id": doc_id, "name": "test"},
                 headers={"X-Forwarded": "true"},
             )
@@ -113,5 +113,5 @@ class TestForwardedWriteToOwnedPartitionSucceeds:
             data = response.json()
             assert data["_id"] == doc_id
         finally:
-            shard_app.partition_to_shard_url.clear()
-            shard_app.partition_to_shard_url.update(original_mapping)
+            shard_app_partitions.partition_to_shard_url.clear()
+            shard_app_partitions.partition_to_shard_url.update(original_mapping)
