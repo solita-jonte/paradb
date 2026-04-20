@@ -42,6 +42,12 @@ async def get_partition_lock(partition_index: int) -> RWLock:
         return _partition_locks[partition_index]
 
 
+async def get_all_partition_locks() -> list[RWLock]:
+    """Get or create the RWLock for a partition."""
+    async with _partition_locks_mutex:
+        return list(_partition_locks.values())
+
+
 def get_document_lock(doc_id: str) -> DocLock:
     return DocLock(doc_id)
 

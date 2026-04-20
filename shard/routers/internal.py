@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from shard.document_locking import get_partition_lock
+from shard.document_locking import get_partition_lock, get_all_partition_locks
 from shard.partitions import partition_to_shard_url
 from shared.types.shard import ShardPartitionInfo
 
@@ -18,9 +18,12 @@ async def halt_flush_partition_writes(partition_index: int):
 
 
 @internal_router.post("/partitions")
-def update_shards(shard_partition_infos: list[ShardPartitionInfo]):
+async def update_shards(shard_partition_infos: list[ShardPartitionInfo]):
     print("shard got new partition table")
     for shard in shard_partition_infos:
         for partition in shard.partitions:
             partition_to_shard_url[partition] = shard.url
+    # release halted partitions
+    for rw_lock in await get_all_partition_locks():
+        await rw_lock.try_release_write()
     return {"status": 0}

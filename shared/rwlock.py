@@ -43,6 +43,10 @@ class RWLock:
             self._writer = False
             self._read_ready.notify_all()
 
+    async def try_release_write(self):
+        if self._writer:
+            await self.release_write()
+
     @asynccontextmanager
     async def for_writing(self):
         try:
