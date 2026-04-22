@@ -82,9 +82,24 @@ scripts/k8s-start.sh
 scripts/k8s-stop.sh
 ```
 
+### Running monitoring in Kubernetes
+
+```bash
+scripts/k8s-monitor.sh
+```
+![ELK](docs/grafana.png)
+
+### Running logging in Kubernetes
+
+```bash
+scripts/k8s-elk.sh
+```
+
+![ELK](docs/kibana.png)
+
 ## Running stress tests
 
-Below is a quick way to hammer the database with concurrent writes and reads using Python and `httpx`:
+Below is a quick way to hammer the database with concurrent writes and reads:
 
 ```bash
 pip install httpx

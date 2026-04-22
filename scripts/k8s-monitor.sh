@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo "Starting monitoring of ParaDB"
+
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 
@@ -21,7 +23,7 @@ kubectl -n monitoring wait \
   --selector=app.kubernetes.io/name=grafana \
   --timeout=300s
 
-echo "Grafana password:"
+echo "Grafana user is admin, the password is:"
 kubectl get secret -n monitoring monitoring-grafana \
   -o jsonpath="{.data.admin-password}" | base64 --decode
 echo

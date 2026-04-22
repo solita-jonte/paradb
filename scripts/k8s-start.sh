@@ -4,6 +4,8 @@ set -e
 # Requires: Docker Desktop with Kubernetes enabled
 # (Settings -> Kubernetes -> Enable Kubernetes)
 
+echo "Starting ParaDB"
+
 # 1. Verify Docker Desktop K8s is the active context
 kubectl config use-context docker-desktop
 
