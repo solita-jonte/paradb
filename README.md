@@ -112,3 +112,15 @@ python scripts/stress_test.py --url http://localhost:3357 --writers 10 --readers
 pip install pytest httpx fastapi uvicorn pydantic
 python -m pytest
 ```
+
+## Scale horizontally
+
+Two shards are started by default. If you want to try using more:
+
+```bash
+kubectl scale deployment shard -n paradb --replicas=5
+```
+
+Note that if you scale down, pods will terminate instantly and there is a 15 second timeout before
+the orchestrator notices the loss of shards and distribute the "free" partitions to the remaining
+shards.
